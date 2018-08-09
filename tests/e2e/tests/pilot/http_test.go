@@ -26,22 +26,31 @@ func TestHttp(t *testing.T) {
 	if !tc.Kube.AuthEnabled {
 		// t is not behind proxy, so it cannot talk in Istio auth.
 		dstPods = append(dstPods, "t")
-	} else {
-		// Auth is enabled for d:80, and disabled for d:8080 using per-service policy.
-		// We expect request from non-envoy client ("t") to d:80 should always fail,
-		// while to d:8080 should always success.
-		cfgs := &deployableConfig{
-			Namespace:  tc.Kube.Namespace,
-			YamlFiles:  []string{"testdata/authn/service-d-mtls-policy.yaml.tmpl"},
-			kubeconfig: tc.Kube.KubeConfig,
-		}
-		cfgs.YamlFiles = append(cfgs.YamlFiles, "testdata/authn/destination-rule-d8080.yaml.tmpl")
-		if err := cfgs.Setup(); err != nil {
-			t.Fatal(err)
-		}
-		defer cfgs.Teardown()
-		dstPods = append(dstPods, "d")
 	}
+	// This policy will enable mTLS globally (mesh policy)
+	globalCfg := &deployableConfig{
+		Namespace:  "", // Use blank for cluster CRD.
+		YamlFiles:  []string{"testdata/authn/v1alpha1/global-mtls.yaml.tmpl"},
+		kubeconfig: tc.Kube.KubeConfig,
+	}
+	// Auth is enabled for d:80, and disabled for d:8080 using per-service policy.
+	// We expect request from non-envoy client ("t") to d:80 should always fail,
+	// while to d:8080 should always success.
+	cfgs := &deployableConfig{
+		Namespace:  tc.Kube.Namespace,
+		YamlFiles:  []string{"testdata/authn/service-d-mtls-policy.yaml.tmpl"},
+		kubeconfig: tc.Kube.KubeConfig,
+	}
+	cfgs.YamlFiles = append(cfgs.YamlFiles, "testdata/authn/destination-rule-d8080.yaml.tmpl")
+	if err := globalCfg.Setup(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfgs.Setup(); err != nil {
+		t.Fatal(err)
+	}
+	defer globalCfg.Teardown()
+	defer cfgs.Teardown()
+	dstPods = append(dstPods, "d")
 
 	logs := newAccessLogs()
 

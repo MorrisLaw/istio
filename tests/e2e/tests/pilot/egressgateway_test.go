@@ -30,6 +30,12 @@ import (
 //    3.b. Traffic from egress gateway goes to actual destination (in our case, its t)
 // The tests will only check for requests from a->t with host matching ext service
 func TestRouteHTTPViaEgressGateway(t *testing.T) {
+	// This policy will enable mTLS globally (mesh policy)
+	globalCfg := &deployableConfig{
+		Namespace:  "", // Use blank for cluster CRD.
+		YamlFiles:  []string{"testdata/authn/v1alpha1/global-mtls.yaml.tmpl"},
+		kubeconfig: tc.Kube.KubeConfig,
+	}
 	// In authn enable test, mTLS is enabled globally, which mean all clients will use TLS
 	// to talk to egress-gateway. We need to explicitly specify the TLSMode to DISABLE in the
 	// DestinationRule to the gateway.
@@ -42,9 +48,13 @@ func TestRouteHTTPViaEgressGateway(t *testing.T) {
 			"testdata/networking/v1alpha3/rule-route-via-egressgateway.yaml"},
 		kubeconfig: tc.Kube.KubeConfig,
 	}
+	if err := globalCfg.Setup(); err != nil {
+		t.Fatal(err)
+	}
 	if err := cfgs.Setup(); err != nil {
 		t.Fatal(err)
 	}
+	defer globalCfg.Teardown()
 	defer cfgs.Teardown()
 
 	for cluster := range tc.Kube.Clusters {
