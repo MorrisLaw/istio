@@ -33,7 +33,7 @@ export BUILD_ZTUNNEL_REPO=""
 # install ambient mesh components such as ztunnel
 istioctl install -y --set profile=ambient 
 
-# set the appropriate env vars to allow to make building 
+# set the appropriate env vars to make building 
 # ztunnel from local repo possible
 export BUILD_ZTUNNEL_REPO="$PWD/../ztunnel"
 export HUB=localhost:5000
