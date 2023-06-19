@@ -28,7 +28,7 @@ fi
 export BUILD_ZTUNNEL_REPO=""
 
 # run the command that actually brings up the kind cluster
-./prow/integ-suite-kind.sh --skip-build --skip-cleanup
+./prow/integ-suite-kind.sh --skip-cleanup
 
 # install ambient mesh components such as ztunnel
 istioctl install -y --set profile=ambient 
