@@ -23,6 +23,7 @@ import (
 
 	v1alpha12 "istio.io/api/analysis/v1alpha1"
 	"istio.io/api/meta/v1alpha1"
+	"istio.io/istio/cni/pkg/ambient"
 	"istio.io/istio/pilot/pkg/config/kube/crdclient"
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
@@ -78,11 +79,15 @@ func NewController(stop <-chan struct{}, rwConfigStore model.ConfigStoreControll
 
 // Run is blocking
 func (c *Controller) Run(stop <-chan struct{}) {
-	t := time.NewTicker(features.AnalysisInterval)
-	oldmsgs := diag.Messages{}
-	for {
-		select {
-		case <-t.C:
+    var x model.ConfigStoreController // read
+    for _, x := range x.Schemas().All() {
+
+		k.RegisterEventHandler(k.GroupVersionKind, func(config.Config, config.config, model.Event) {
+			// find all analyzer that care about this type
+			// run analyze, update status
+
+			// copied from below...
+			oldmsgs := diag.Messages{}
 			res, err := c.analyzer.ReAnalyze(stop)
 			if err != nil {
 				log.Errorf("In-cluster analysis has failed: %s", err)
@@ -113,9 +118,56 @@ func (c *Controller) Run(stop <-chan struct{}) {
 			}
 			oldmsgs = res.Messages
 			log.Debugf("finished enqueueing all statuses")
-		case <-stop:
-			t.Stop()
-			return
 		}
+	x.RegisterEventHandler()
+
+	// t := time.NewTicker(features.AnalysisInterval)
+	// oldmsgs := diag.Messages{}
+	// for {
+	// 	select {
+	// 	case <-t.C:
+	// 		res, err := c.analyzer.ReAnalyze(stop)
+	// 		if err != nil {
+	// 			log.Errorf("In-cluster analysis has failed: %s", err)
+	// 			continue
+	// 		}
+	// 		// reorganize messages to map
+	// 		index := map[status.Resource]diag.Messages{}
+	// 		for _, m := range res.Messages {
+	// 			key := status.ResourceFromMetadata(m.Resource.Metadata)
+	// 			index[key] = append(index[key], m)
+	// 		}
+	// 		// if we previously had a message that has been removed, ensure it is removed
+	// 		// TODO: this creates a state destruction problem when istiod crashes
+	// 		// in that old messages may not be removed.  Not sure how to fix this
+	// 		// other than write every object's status every loop.
+	// 		for _, m := range oldmsgs {
+	// 			key := status.ResourceFromMetadata(m.Resource.Metadata)
+	// 			if _, ok := index[key]; !ok {
+	// 				index[key] = diag.Messages{}
+	// 			}
+	// 		}
+	// 		for r, m := range index {
+	// 			// don't try to write status for non-istio types
+	// 			if strings.HasSuffix(r.Group, "istio.io") {
+	// 				log.Debugf("enqueueing update for %s/%s", r.Namespace, r.Name)
+	// 				c.statusctl.EnqueueStatusUpdateResource(m, r)
+	// 			}
+	// 		}
+	// 		oldmsgs = res.Messages
+	// 		log.Debugf("finished enqueueing all statuses")
+	// 	case <-stop:
+	// 		t.Stop()
+	// 		return
+	// 	}
 	}
 }
+
+// - replace ticker with event changes
+// - tie it into config store in config changes
+// - pkg/config/analysis/analyzers/virtualservice/gateways.go
+// - targetRefGetter interface or something to build the analyzer on top of
+// - Metadata function in analyzer can have inputs defined as it relates to policy (and of course gateway)
+// 	- do we care if a gateway is healthy? if you don't have a super compelling reason to look at gateway status don't.
+// - we definitely need analyzers for crd
+// - keep an eye out for other anazlyers that makes sense for ambient
